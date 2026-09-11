@@ -10,7 +10,7 @@ Deliverables for the Staff DevOps Engineer technical exercise: an Identity Serve
 | [`.github/workflows/rails-deploy.yml`](./.github/workflows/rails-deploy.yml) | 2 | Standardized GitHub Actions pipeline: test → build → push to ECR → deploy to ECS Fargate, with OIDC auth and automated rollback |
 | [`Dockerfile`](./Dockerfile) / [`.dockerignore`](./.dockerignore) | 3 | Multi-stage production Dockerfile for the Rails application |
 | [`OBSERVABILITY.md`](./OBSERVABILITY.md) | 4 | SLOs/SLIs, CloudWatch metrics and alarms, X-Ray tracing, log strategy, and the alerting pipeline to on-call |
-| [`docs/decision-log.html`](./docs/decision-log.html) | — | Not a required deliverable. A running, source-cited record of the non-obvious calls made while writing the above — each entry shows the question, the research that settled it (with links to primary sources), the decision, and the reasoning. Open it directly in a browser; it's referenced by ID (D1, D2, …) throughout `ADR.md` and `OBSERVABILITY.md` wherever a specific claim needed a citation rather than an assertion. |
+| [`docs/decision-log.html`](./docs/decision-log.html) / [`docs/decision-log.md`](./docs/decision-log.md) | — | Not a required deliverable. A running, source-cited record of the non-obvious calls made while writing the above — each entry shows the question, the research that settled it (with links to primary sources), the decision, and the reasoning. The `.html` version is the designed one, meant to be opened in a browser; the `.md` version has identical content, plain, for reading directly on GitHub or in an editor. Referenced by ID (D1, D2, …) throughout `ADR.md` and `OBSERVABILITY.md` wherever a specific claim needed a citation rather than an assertion. |
 
 ## Approach
 
