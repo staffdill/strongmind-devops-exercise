@@ -1,0 +1,759 @@
+<title>Migration Decision Log</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Nunito+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #F0F2EE;
+    --surface: #FFFFFF;
+    --surface-2: #E7EAE2;
+    --grid-line: #DCE1D5;
+    --ink: #282829; /* StrongMind's own body-text color */
+    --muted: #5C6660;
+    --faint: #8A928B;
+    --accent: #E87D66; /* StrongMind's global accent-color (coral) — decorative use */
+    --accent-text: #B84C36; /* darkened for AA contrast where the accent renders as text */
+    --accent-ink: #7A3223;
+    --accent-soft: #FBE3DC;
+    --warn: #F3B51B; /* StrongMind's "extra-color-1" (amber) — decorative use */
+    --warn-text: #8A6212; /* darkened for AA contrast where amber renders as text */
+    --warn-soft: #FCEFD1;
+    --line: #D3D8CD;
+    --shadow: rgba(27, 35, 33, 0.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161A;
+      --surface: #161F22;
+      --surface-2: #1C2629;
+      --grid-line: #223033;
+      --ink: #EAE6E1;
+      --muted: #9AA6A0;
+      --faint: #6C7975;
+      --accent: #F0987F;
+      --accent-text: #F0987F; /* light-on-dark already clears AA, no darkening needed */
+      --accent-ink: #FBD9CB;
+      --accent-soft: #3A241E;
+      --warn: #F7C550;
+      --warn-text: #F7C550;
+      --warn-soft: #3D2E12;
+      --line: #263133;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10161A;
+    --surface: #161F22;
+    --surface-2: #1C2629;
+    --grid-line: #223033;
+    --ink: #EAE6E1;
+    --muted: #9AA6A0;
+    --faint: #6C7975;
+    --accent: #F0987F;
+    --accent-text: #F0987F;
+    --accent-ink: #FBD9CB;
+    --accent-soft: #3A241E;
+    --warn: #F7C550;
+    --warn-text: #F7C550;
+    --warn-soft: #3D2E12;
+    --line: #263133;
+    --shadow: rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background:
+      repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 32px),
+      var(--bg);
+    color: var(--ink);
+    font-family: "Nunito Sans", system-ui, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .entry { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+  }
+
+  a { color: var(--accent-text); text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .page {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 28px;
+    margin-bottom: 40px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: "Poppins", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.9rem, 4vw, 2.5rem);
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .title-wrap { margin-bottom: 16px; }
+
+  .squiggle {
+    display: block;
+    width: 180px;
+    max-width: 55%;
+    height: 14px;
+    margin-top: 2px;
+  }
+  .squiggle path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .dek {
+    font-size: 1.02rem;
+    color: var(--muted);
+    max-width: 62ch;
+    margin: 0 0 20px;
+  }
+
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--faint);
+  }
+
+  .meta-strip span { white-space: nowrap; }
+  .meta-strip b { color: var(--muted); font-weight: 500; }
+
+  .howto {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 44px;
+    font-size: 0.92rem;
+    color: var(--muted);
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+  .howto strong { color: var(--ink); font-weight: 600; }
+
+  .part-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 48px 0 20px;
+  }
+
+  .part-header .part-tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    color: var(--accent-text);
+    background: var(--accent-soft);
+    border-radius: 6px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+
+  .part-header h2 {
+    font-family: "Poppins", Georgia, serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .entries { display: flex; flex-direction: column; gap: 22px; }
+
+  .entry {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 22px 24px 20px;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+  .entry.status-open { border-left-color: var(--warn); }
+
+  .entry-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin-bottom: 14px;
+  }
+
+  .entry-id {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: 2px 7px;
+  }
+
+  .entry-title {
+    font-family: "Poppins", Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 0;
+    flex: 1 1 240px;
+    min-width: 0;
+    text-wrap: balance;
+  }
+
+  .pill {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+  .pill-decided { background: var(--accent-soft); color: var(--accent-ink); }
+  .pill-open { background: var(--warn-soft); color: var(--warn-text); }
+
+  .field-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 16px 0 6px;
+  }
+  .field-label:first-of-type { margin-top: 0; }
+
+  .question {
+    font-size: 0.98rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .findings { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 8px; }
+  .findings li { font-size: 0.95rem; }
+
+  .decision-box {
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.98rem;
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+
+  .rationale { font-size: 0.95rem; color: var(--ink); }
+
+  .sources {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+  }
+  .sources a { word-break: break-word; }
+
+  .review-intro { font-size: 0.95rem; color: var(--muted); margin-bottom: 18px; }
+
+  .table-wrap { overflow-x: auto; }
+
+  .review-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .review-table th {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-align: left;
+    padding: 6px 16px 10px 0;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .review-table td {
+    padding: 12px 16px 12px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .review-table tr:last-child td { border-bottom: none; }
+  .review-table td:first-child { color: var(--muted); width: 48%; }
+  .review-table tr.review-cat td {
+    padding: 22px 0 6px;
+    border-bottom: none;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+  }
+  .review-table tr.review-cat:first-child td { padding-top: 0; }
+
+  footer.page-foot {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 0.82rem;
+    color: var(--faint);
+  }
+
+  @media (max-width: 520px) {
+    .page { padding: 40px 16px 72px; }
+    .entry { padding: 18px 16px 16px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">StrongMind — Staff DevOps Technical Exercise</p>
+    <div class="title-wrap">
+      <h1>Migration Decision Log</h1>
+      <svg class="squiggle" viewBox="0 0 320 20" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M2,14 C30,4 55,18 85,10 C115,2 140,16 170,9 C200,2 225,17 255,9 C280,3 300,13 318,7" />
+      </svg>
+    </div>
+    <p class="dek">A running, source-cited record of the calls made while building the Identity Server ADR, the Rails CI/CD pipeline, the Dockerfile, and the observability plan — kept so every decision can be traced back to evidence.</p>
+    <div class="meta-strip">
+      <span><b>Started</b> 2026-09-11</span>
+      <span><b>Repo</b> strongmind</span>
+      <span><b>Scope</b> Parts 1–4</span>
+    </div>
+  </header>
+
+  <div class="howto">
+    <strong>How to read this.</strong> Each entry is one question that came up while drafting the deliverables. It shows the question as asked, the findings that settled it (with links to primary sources), the decision, and the reasoning — the same trail a reviewer could follow to ask "why did you choose this?"
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">PART 1</span>
+    <h2>Identity Server Migration — ADR</h2>
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d1">
+      <div class="entry-head">
+        <span class="entry-id">D1</span>
+        <h3 class="entry-title">Stand up a directory service to bridge Azure AD Domain Services?</h3>
+        <span class="pill pill-decided">Decided — rejected</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">The Identity Server currently calls Azure AD Domain Services (AADDS) for directory lookups. After the move to ECS Fargate, does it make sense to stand up an AWS directory service (Simple AD) to preserve that dependency?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>AWS Directory Service Simple AD closed to new customers on <strong>July 30, 2026</strong> — it can no longer be provisioned at all as of this exercise.</li>
+        <li>Even before that cutoff, Simple AD never supported trust relationships with other domains — only AWS Managed Microsoft AD does.</li>
+        <li>Azure AD Domain Services doesn't support trust relationships either — it's a one-way sync target <em>from</em> Entra ID, not a domain controller you can federate with. So even Managed Microsoft AD would have nothing on the Azure side to trust against.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Do not stand up any AWS directory service to bridge this dependency. Treat the AADDS call as a question of "what does the Identity Server actually need from directory lookups," not "how do we replicate the directory."</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">If the lookups are logical (user/group existence, membership) rather than raw LDAP/Kerberos binds, the clean post-migration path is calling the <strong>Microsoft Graph API against Entra ID</strong> directly — a REST/OAuth call from anywhere, with no cross-cloud AD infrastructure to run or pay for. If the code is genuinely hard-wired to LDAP/Kerberos and rewriting it is out of scope here, the honest move is to keep the interim cross-cloud call to AADDS and document it as tech debt in the ADR's Risk Register — not stand up parallel AD infrastructure that solves an infrastructure problem the app doesn't actually have.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://docs.aws.amazon.com/directoryservice/latest/admin-guide/directory_simple_ad.html">AWS Directory Service — Simple AD overview</a></li>
+        <li><a href="https://docs.aws.amazon.com/directoryservice/latest/admin-guide/simple_ad_best_practices.html">AWS Directory Service — Simple AD best practices (trust limitation)</a></li>
+        <li><a href="https://docs.aws.amazon.com/directoryservice/latest/admin-guide/directory_microsoft_ad.html">AWS Directory Service — AWS Managed Microsoft AD (trust support)</a></li>
+        <li><a href="https://learn.microsoft.com/en-us/entra/identity/domain-services/overview">Microsoft Learn — Microsoft Entra Domain Services overview</a></li>
+      </ul>
+    </article>
+
+    <article class="entry" id="d3">
+      <div class="entry-head">
+        <span class="entry-id">D3</span>
+        <h3 class="entry-title">Traffic cutover: Route 53 weighted routing vs. ALB blue/green</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">How do we move traffic from the Azure App Service to the new ECS Fargate service with zero downtime — weighted DNS, or a full blue/green cutover via an ALB/CodeDeploy?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Route 53 supports weighted routing combined with per-record health checks in an "active-active" pattern: every healthy record is a live, eligible answer, and traffic share shifts by adjusting weights.</li>
+        <li>If the AWS-side health check goes unhealthy, Route 53 stops answering with it — traffic effectively reverts to the Azure origin automatically, with no custom failover logic to write.</li>
+        <li>This works at the DNS layer, so it's agnostic to which cloud either endpoint lives in — unlike ALB-native blue/green, which only operates inside one load balancer in one account.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Cut over with Route 53 weighted routing across health-checked records for the Azure App Service and the new ALB in front of ECS, shifting weight in stages (e.g. 10% → 50% → 100%) rather than a single flip.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">Consistent with <a href="#d2">D2</a>: this is a one-time cross-cloud cutover, so it doesn't justify standing up CodeDeploy just for this migration. DNS weighting is the natural mechanism when the two endpoints being compared live in different clouds, and the health-check-driven reversion gives the ADR a concrete, low-effort rollback trigger and procedure instead of a manual one.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://repost.aws/knowledge-center/route-53-dns-health-checks">AWS re:Post — Use Route 53 health checks for DNS failover</a></li>
+        <li><a href="https://repost.aws/knowledge-center/route-53-prevent-automatic-failback">AWS re:Post — Route 53 automatic failback behavior</a></li>
+      </ul>
+    </article>
+
+    <article class="entry" id="d8">
+      <div class="entry-head">
+        <span class="entry-id">D8</span>
+        <h3 class="entry-title">DB migration: AWS DMS has no CDC path from Azure SQL Database — plan around a bacpac cutover, not continuous replication</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">What tooling migrates Azure SQL Database to RDS for SQL Server, and can it run as continuous replication ahead of a near-zero-downtime cutover?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>AWS's own DMS documentation states plainly: "AWS DMS doesn't support change data capture operations (CDC) with Azure SQL Database." Azure SQL Database can only be a DMS <em>full-load</em> source, not an ongoing-replication source.</li>
+        <li>Azure SQL Database (PaaS, not Managed Instance) doesn't expose native <code>BACKUP DATABASE</code> — backups are fully automatic and system-managed, so the RDS "native backup/restore via S3" path isn't available either.</li>
+        <li>Microsoft's own supported export mechanism for Azure SQL Database is the .bacpac format (schema + data), best-practiced for databases under 200GB — and an identity/auth database (users, clients, grants/tokens) is almost certainly well inside that.</li>
+        <li>This has a knock-on effect on <a href="#d3">D3</a>: since neither DB can be authoritative for both origins at once without continuous sync, the weighted Route 53 ramp can't be a multi-day gradual shift — it has to be compressed into the same short maintenance window as the DB cutover.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Pre-stage with rehearsal bacpac export/import runs; cut over in a short, overnight (Mountain Time) maintenance window: write-freeze &rarr; final bacpac export/import &rarr; row-count/checksum validation &rarr; point ECS at RDS &rarr; compressed Route 53 ramp (10% &rarr; 50% &rarr; 100% in minutes, not days) &rarr; 24&ndash;48h bake with Azure kept warm at 0% weight as a rollback option.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">This is the same theme as D1 and D5: the tool that looks like the obvious default (DMS with CDC, the way it works for most other DMS sources) doesn't actually apply to this specific source engine, and finding that out before writing the ADR avoids promising a live cutover the tooling can't deliver. Being upfront that this needs a real (short, scheduled, off-peak) maintenance window is more defensible than an inaccurate "zero-downtime" claim the on-call engineer would discover the hard way. The one limitation this doesn't remove: any write that lands on AWS during the bake period can't cleanly roll back to Azure without manual reconciliation — that's going in the Risk Register rather than glossed over.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://docs.aws.amazon.com/dms/latest/userguide/CHAP_Source.AzureSQL.html">AWS DMS — Using Microsoft Azure SQL Database as a source (CDC not supported)</a></li>
+        <li><a href="https://learn.microsoft.com/en-us/training/modules/backup-restore-databases/4-use-azure-sql-database">Microsoft Learn — Back up and restore for Azure SQL Database (automatic, no native BACKUP)</a></li>
+        <li><a href="https://www.nextgensoft.io/blogs/guide-to-migrating-azure-sql-database-to-aws-rds-using-bacpac/">NextGenSoft — Migrating Azure SQL Database to RDS SQL Server via .bacpac</a></li>
+      </ul>
+    </article>
+
+    <article class="entry" id="d9">
+      <div class="entry-head">
+        <span class="entry-id">D9</span>
+        <h3 class="entry-title">Pre-scale ahead of the 7&ndash;9 AM spike instead of relying on reactive autoscaling alone</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">The 7&ndash;9 AM Mountain Time school-start spike (400&rarr;1,200 req/min) is a known, recurring pattern. Should capacity be handled purely by CPU-based target tracking, or scaled up ahead of time?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Target tracking is reactive: a Fargate task has to pull its image, boot, and pass two consecutive health checks before it can take traffic, so waiting for CPU to cross the 60% threshold at 7:00 AM means the front edge of the spike is served understaffed.</li>
+        <li>Application Auto Scaling supports <code>put-scheduled-action</code> against an ECS service's <code>DesiredCount</code>/<code>MinCapacity</code>, run alongside &mdash; not instead of &mdash; a target-tracking policy; the two compose (target tracking still scales above whatever floor the schedule sets).</li>
+        <li>Scheduled actions support a <code>--timezone</code> parameter (e.g. <code>America/Denver</code>) instead of a fixed UTC offset, specifically so the schedule doesn't drift by an hour across DST transitions.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Add two scheduled actions on top of the existing target-tracking policy: raise <code>MinCapacity</code> 3&rarr;5 at 6:15 AM (45-minute lead time for task startup), drop it back to 3 at 9:15 AM (15-minute trailing buffer), weekdays only, both declared with <code>--timezone "America/Denver"</code>. (Baseline raised from 2&rarr;3 tasks during peer review &mdash; see the Review Sheet below &mdash; for AZ-failure headroom, and the scheduled floor moved with it.)</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">This is the standard AWS-recommended pairing for a workload with one predictable daily pattern layered on otherwise-normal variance: schedule the floor for the known pattern, let target tracking handle everything unpredictable above it. The DST-safe timezone parameter is a small detail that's cheap to get right up front and easy to silently get wrong (an hour of under-capacity, twice a year, at the exact worst time) if a fixed UTC offset is hardcoded instead.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2021/02/scheduled-actions-application-auto-scaling-support-local-time-zone">AWS &mdash; Scheduled Actions of Application Auto Scaling now support Local Time Zone</a></li>
+        <li><a href="https://repost.aws/knowledge-center/ecs-fargate-service-auto-scaling">AWS re:Post &mdash; Configure Amazon ECS Service Auto Scaling on Fargate</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">CROSS-CUTTING</span>
+    <h2>Deployment Mechanics (Parts 1 &amp; 2)</h2>
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d2">
+      <div class="entry-head">
+        <span class="entry-id">D2</span>
+        <h3 class="entry-title">ECS deployment mechanism: native rolling + circuit breaker, not CodeDeploy blue/green</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">StrongMind already has a partially-built GitHub Actions deployment pipeline for Rails. Should the standardized pipeline (Part 2) — and the Identity Server ECS service (Part 1) — deploy via CodeDeploy blue/green, or ECS's native rolling update?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>ECS rolling deployment is the default strategy and needs no extra infrastructure — no CodeDeploy application, deployment group, or additional IAM roles.</li>
+        <li>The ECS deployment circuit breaker (GA since December 2020, with configurable failure thresholds added in 2026) automatically detects a deployment that can't stabilize and rolls back to the last successful task definition — automated rollback without CodeDeploy.</li>
+        <li>ECS also shipped 1-click manual rollback for service deployments in 2025, giving a fast manual escape hatch on top of the automatic circuit breaker.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Standardize both the Identity Server and the Rails pipeline on ECS's native rolling deployment with the deployment circuit breaker enabled, driven entirely from GitHub Actions (register task definition → <code>update-service</code> → wait for stability). No CodeDeploy.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">Workstream B is explicitly about standardizing CI/CD that "any Rails service in the org can adopt" — introducing CodeDeploy would add a second deployment control plane (application, deployment group, lifecycle hooks) for every team to learn on top of GitHub Actions, for marginal benefit over rolling + circuit breaker at this traffic profile. One mechanism, reused everywhere, is easier to standardize and easier to hand off.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2020/12/amazon-ecs-announces-the-general-availability-of-ecs-deployment-circuit-breaker/">AWS — ECS Deployment Circuit Breaker GA (2020)</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-ecs-circuit-breaker-settings/">AWS — Configurable ECS deployment circuit breaker settings (2026)</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2025/05/amazon-ecs-1-click-rollbacks-service-deployments">AWS — ECS 1-click rollbacks for service deployments (2025)</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">CROSS-CUTTING</span>
+    <h2>Failure Notification (Parts 1, 2 &amp; 4)</h2>
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d4">
+      <div class="entry-head">
+        <span class="entry-id">D4</span>
+        <h3 class="entry-title">Route deploy/cutover failures through Part 4's alerting pipeline, not a bespoke webhook</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">How should a failed Rails deploy (Part 2) or a failed Identity Server cutover (Part 1, D3) notify someone — a dedicated Slack/webhook step in the GitHub Actions workflow, or the CloudWatch → Jira Ops pipeline planned for Part 4? Could the D3 Route 53 health checks double as that signal?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Route 53 health checks publish their pass/fail state natively as a <code>HealthCheckStatus</code> CloudWatch metric (1/0) in the <code>AWS/Route53</code> namespace — no extra plumbing required to alarm on it.</li>
+        <li>That means the D3 cutover health checks can feed a CloudWatch alarm that terminates in the same Jira Ops pipeline Part 4 already needs — one alerting path, not two.</li>
+        <li>Route 53 health checks don't apply to the standing Rails pipeline: routine deploys don't compare two different cloud endpoints, so there's nothing meaningful to point a Route 53 health check at that isn't already an ALB target-group health check.</li>
+        <li>The ECS deployment circuit breaker (D2) already reads ALB target health directly during a rolling update, and <code>aws ecs wait services-stable</code> surfaces that as a GitHub Actions job failure — the tighter, native signal for a same-cloud deploy.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">No bespoke Slack/webhook step in <code>rails-deploy.yml</code>. Rollback is triggered by the ECS circuit breaker + a failed <code>wait services-stable</code>; the resulting service-health alarms (Part 4) are what page the on-call engineer. The Identity Server's Route 53 cutover health check feeds a CloudWatch alarm into that same Part 4 pipeline.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">One alerting pipeline that everything drains into is easier to reason about and doesn't make the CI/CD workflow depend on a chat tool or webhook secret that isn't confirmed to exist at StrongMind. It also means Part 4's design work directly pays for Part 1 and Part 2's "how do we know it failed" requirements instead of duplicating it.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/monitoring-health-checks.html">AWS — Monitoring Route 53 health checks using CloudWatch</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2013/06/26/route-53-announces-cloudwatch-metrics-for-health-checks">AWS — Route 53 CloudWatch metrics for health checks (launch)</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">PART 3</span>
+    <h2>Multi-stage Dockerfile — Rails Application</h2>
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d5">
+      <div class="entry-head">
+        <span class="entry-id">D5</span>
+        <h3 class="entry-title">Base image: start on <code>ruby:3.3-slim</code>, revisit Alpine later</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">Should the production Dockerfile start on <code>ruby:3.3-slim</code> (Debian/glibc) or <code>ruby:3.3-alpine</code> (musl libc), with a plan to move to Alpine once it's "more mature" for this app?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Alpine swaps glibc for musl libc. Gems with native C extensions built against glibc assumptions can fail outright — documented real-world breakage includes protobuf/grpc-dependent gems and Oracle Instant Client bindings.</li>
+        <li>Common gems (nokogiri, grpc, pg) usually compile fine on Alpine, but less common ones are hit-or-miss — the safe compatibility surface has to be verified against this app's actual Gemfile, not assumed.</li>
+        <li>Musl's memory allocator behaves differently from glibc's: Rails apps on Alpine have been observed using roughly 15–20% more RSS memory at steady state — relevant here because Fargate task memory is billed and sized explicitly.</li>
+        <li>Size difference is real (roughly 100MB+ smaller base layer on Alpine) but multi-stage builds already claw back most of that gap on either base, since build tooling and gem caches never reach the runtime stage.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Ship <code>ruby:3.3-slim</code> for the runtime stage now. Revisit Alpine only after the app's specific gem set has been tested against musl in CI and the memory-footprint tradeoff has been measured under real load — not as a default "smaller is better" swap.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">This is a case where the size win is the easy part to see and the compatibility/memory cost is the part that bites in production. Slim removes an entire class of native-extension surprises during a migration that already has enough moving parts (new cloud, new database engine, new secrets store); Alpine stays on the table as a deliberate, measured optimization once the team has bandwidth to validate it — not a default.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://docs.docker.com/dhi/core-concepts/glibc-musl/">Docker Docs — glibc and musl support</a></li>
+        <li><a href="https://github.com/googleapis/google-cloud-ruby/issues/1351">google-cloud-ruby — Alpine gem incompatibility issue</a></li>
+        <li><a href="https://hub.docker.com/_/ruby">Docker Hub — official Ruby image (slim vs alpine variants)</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d6">
+      <div class="entry-head">
+        <span class="entry-id">D6</span>
+        <h3 class="entry-title">Skip Thruster; run Puma directly behind the ALB</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">Rails 8 apps generate with Thruster (Basecamp's HTTP/2 proxy) in front of Puma by default. Keep it in the container, or run Puma directly?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Rails 8's default generated Dockerfile adds the <code>thruster</code> gem and runs <code>CMD ["./bin/thrust", "./bin/rails", "server"]</code>, exposing port 80.</li>
+        <li>Thruster's value is HTTP/2 termination, TLS, compression, and X-Sendfile asset serving in front of Puma — all things an ALB in front of an ECS service already does at the load-balancer layer.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Run Puma directly on port 3000; no Thruster. <code>CMD ["./bin/rails", "server"]</code>.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">Behind an ALB, Thruster would be a second proxy hop terminating things the ALB already terminates — one more process and dependency in the image for no functional gain in this topology. Worth revisiting only if this service is ever exposed without a load balancer in front of it.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://blog.saeloun.com/2026/05/09/rails-8-thruster-http2-proxy-server/">Saeloun — Rails 8 adds Thruster as the default HTTP/2 proxy</a></li>
+      </ul>
+    </article>
+
+    <article class="entry" id="d7">
+      <div class="entry-head">
+        <span class="entry-id">D7</span>
+        <h3 class="entry-title">HEALTHCHECK: Ruby one-liner against Rails' <code>/up</code>, not curl</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">What should the Dockerfile's <code>HEALTHCHECK</code> hit, and does it need curl installed to do it?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>Rails 7.1 added a default health check route at <code>/up</code>, served by <code>Rails::HealthController#show</code> — 200 if the app booted, 503 otherwise. It's already present on any Rails 7.1+ app.</li>
+        <li>Ruby (with <code>net/http</code> from the standard library) is already in the image; curl is not, and adding it purely for a health check is one more general-purpose network tool sitting in a container that doesn't otherwise need one.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Use a one-line Ruby <code>Net::HTTP</code> request against <code>/up</code> for the HEALTHCHECK instead of installing curl.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">This is the "comment where you're making a deliberate tradeoff" the Part 3 requirements ask for: a slightly slower Ruby interpreter start per health check poll, traded for not adding a package to the final image at all. It also checks the same signal ECS/ALB target-group health checks should be pointed at, so the container's own liveness view matches what's deciding traffic routing.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://blog.saeloun.com/2023/02/27/rails-introduces-default-health-check-controller/">Saeloun — Rails 7.1 introduces default health check controller</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">PART 4</span>
+    <h2>Observability Design Plan</h2>
+  </div>
+
+  <div class="entries">
+
+    <article class="entry" id="d11">
+      <div class="entry-head">
+        <span class="entry-id">D11</span>
+        <h3 class="entry-title">X-Ray via ADOT sidecar (not the legacy X-Ray daemon), and how Jira Ops actually receives a CloudWatch alarm</h3>
+        <span class="pill pill-decided">Decided</span>
+      </div>
+
+      <p class="field-label">Question</p>
+      <p class="question">Two mechanics needed to be right, not just referenced: how does a .NET service on ECS Fargate actually get traces into X-Ray, and what's the literal mechanism connecting a CloudWatch alarm to Jira Ops (OpsGenie)?</p>
+
+      <p class="field-label">Findings</p>
+      <ul class="findings">
+        <li>AWS's current guidance for ECS Fargate tracing has moved past the classic standalone X-Ray daemon to the AWS Distro for OpenTelemetry (ADOT) Collector running as a sidecar container in the same task definition, with the app instrumented via the OpenTelemetry SDK rather than the legacy X-Ray SDK directly.</li>
+        <li>Jira Service Management's own documented CloudWatch integration is: JSM issues an endpoint URL, an SNS topic gets an HTTPS subscription pointed at that URL, and CloudWatch alarms use that SNS topic as their alarm action. JSM/OpsGenie handles on-call routing and dedup on its side.</li>
+        <li>RDS alarm thresholds (CPU, connections, storage) were cross-checked against AWS's own RDS monitoring guidance rather than picked arbitrarily: CPU warning &gt;70%/critical &gt;80% sustained, connections &gt;90% of the instance class max, free storage warning &lt;20%/critical &lt;10%.</li>
+      </ul>
+
+      <p class="field-label">Decision</p>
+      <p class="decision-box">Trace via an ADOT collector sidecar exporting to X-Ray, not a bare X-Ray daemon. Alert via CloudWatch Alarm &rarr; SNS &rarr; HTTPS subscription to the JSM-issued endpoint &rarr; Jira Ops on-call routing.</p>
+
+      <p class="field-label">Rationale</p>
+      <p class="rationale">Same pattern as D6 (Thruster) and D1 (Simple AD): describing the outcome AWS actually wants ("get traces into X-Ray") using the mechanism that's since been superseded reads as stale rather than current. The JSM/SNS mechanism matters because "alerts go to Jira Ops" is meaningless without the actual plumbing — this is what OBSERVABILITY.md needs to be usable as real documentation, not just a diagram label.</p>
+
+      <p class="field-label">Sources</p>
+      <ul class="sources">
+        <li><a href="https://aws-otel.github.io/docs/setup/ecs/task-definition-for-ecs-fargate/">AWS Distro for OpenTelemetry — ECS Fargate task definition setup</a></li>
+        <li><a href="https://support.atlassian.com/jira-service-management-cloud/docs/integrate-with-amazon-cloudwatch/">Atlassian — Integrate Jira Service Management with Amazon CloudWatch</a></li>
+        <li><a href="https://repost.aws/knowledge-center/storage-full-rds-cloudwatch-alarm">AWS re:Post — CloudWatch alarms for RDS free storage space</a></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <div class="part-header">
+    <span class="part-tag">REVIEW</span>
+    <h2>Review Sheet</h2>
+  </div>
+
+  <p class="review-intro">Every deliverable went through peer review before being called done. Findings and their resolutions, by area — the final state each file was left in, not a transcript of getting there.</p>
+
+  <div class="table-wrap">
+  <table class="review-table">
+    <thead><tr><th>Finding</th><th>Resolution</th></tr></thead>
+    <tbody>
+      <tr class="review-cat"><td colspan="2">Cutover &amp; migration design</td></tr>
+      <tr><td>The write-freeze could end before the Route 53 ramp reached 100% AWS, leaving Azure and RDS both able to accept writes at once.</td><td>Freeze now explicitly spans the entire ramp, lifting only at 100% AWS (or reverting to Azure as the writer if the rollback trigger fires mid-ramp).</td></tr>
+      <tr><td>"2 tasks, multi-AZ" doesn't survive a real AZ failure — one AZ down could leave a single task serving all auth traffic.</td><td>Baseline raised to 3 tasks across 3 AZs; the scheduled peak floor (D9) moved with it, 3&rarr;5.</td></tr>
+      <tr><td>A compressed DNS ramp assumes client/resolver caches have already expired, which a same-night TTL change doesn't achieve.</td><td>TTL drops to 60s at least 48 hours ahead of the maintenance window.</td></tr>
+      <tr><td>Neither cutover step said which path the two Route 53 health checks probe — if either hit an endpoint affected by the freeze, the freeze itself could force an unplanned weight shift.</td><td>Azure-side check hits <code>/health/live</code> (unaffected by the freeze); ALB-side hits <code>/health/ready</code> (a real dependency signal — what makes it a meaningful rollback trigger).</td></tr>
+      <tr><td>The AADDS/Entra ID decision (D1) hedged on "where the code allows" without saying what happens where it doesn't.</td><td>Week-1 call-site audit, NSG-locked secure LDAP over the internet as the interim path for whatever's genuinely LDAP-bound, one-quarter deadline instead of open-ended debt.</td></tr>
+      <tr><td>RDS for SQL Server's licensing cost, and two cheaper alternatives (RDS Postgres, Azure SQL Managed Instance), went unmentioned.</td><td>ADR states the cost tradeoff plainly and names both alternatives as considered and rejected, with reasons.</td></tr>
+      <tr><td>.NET 6 is already past end of support, and .NET 8 &mdash; the obvious-sounding fix &mdash; reaches its own end of support two months from now.</td><td>Risk Register names the EOL explicitly; the recommended target is .NET 10 LTS, not .NET 8.</td></tr>
+
+      <tr class="review-cat"><td colspan="2">Pipeline correctness (<code>rails-deploy.yml</code>)</td></tr>
+      <tr><td>A workflow-level <code>cancel-in-progress: true</code> could cancel an entire in-flight run &mdash; including a live deploy &mdash; regardless of the deploy job's own non-cancelling concurrency group.</td><td>Top-level <code>cancel-in-progress</code> is now conditional on ref/event: false for anything that can reach the deploy job.</td></tr>
+      <tr><td><code>workflow_dispatch</code> can target any branch; keying the group on <code>ref</code> alone meant a later push to that branch could still cancel an in-flight manual deploy sharing the group.</td><td><code>workflow_dispatch</code> runs key their group on <code>run_id</code> instead, so they can never share a cancellable group with a plain push.</td></tr>
+      <tr><td><code>wait-for-service-stability</code> exiting 0 doesn't prove the new revision is running &mdash; if the ECS circuit breaker silently rolled back, the action still reports success (confirmed as a tracked, still-open upstream issue).</td><td>Added a step comparing the live PRIMARY deployment's task definition against the one just registered; a mismatch fails the job and triggers rollback.</td></tr>
+      <tr><td>Widening the rollback trigger to catch that silent-rollback case also made it fire on unrelated failures (a throttled AWS API call, OIDC auth) &mdash; forcing a needless production bounce.</td><td>Rollback now gated on the deploy or verify step specifically failing; the notification step stays broader, since an unrelated failure should still page even though it shouldn't restart the service.</td></tr>
+      <tr><td>The pipeline never sent its own failure notification, despite that being a literal requirement &mdash; relying on CloudWatch alarms alone satisfies it by inference, not in the file being graded.</td><td>Added an <code>if: failure()</code> step publishing to the same SNS topic the CloudWatch alarms already use.</td></tr>
+      <tr><td>Building <code>linux/amd64,linux/arm64</code> on a standard x86_64 GitHub runner needs QEMU registered &mdash; without it, this is a documented failure mode, not an edge case.</td><td>Added <code>docker/setup-qemu-action</code> before Buildx in the push job.</td></tr>
+      <tr><td>Multi-arch was justified only as "the prompt said so."</td><td>Named the actual reason: Graviton (arm64) Fargate tasks run roughly 20% cheaper for equivalent vCPU/memory, and switching later is a task-definition field change, not a rebuild.</td></tr>
+      <tr><td>The <code>:latest</code> ECR tag is a footgun for anyone deploying by hand from the console.</td><td>Commented explicitly: the pipeline always deploys by SHA; <code>:latest</code> exists for human convenience only.</td></tr>
+      <tr><td><code>describe-task-definition</code> by family returns the latest <em>registered</em> revision, not necessarily the one currently <em>serving</em> traffic.</td><td>Documented as an explicit assumption rather than left implicit.</td></tr>
+
+      <tr class="review-cat"><td colspan="2">Container &amp; runtime</td></tr>
+      <tr><td>Rails' Dockerfile <code>HEALTHCHECK</code> has no effect on ECS Fargate &mdash; ECS ignores an image's embedded check entirely unless the same check is separately declared in the task definition.</td><td>Documented explicitly, with the exact task-definition <code>healthCheck</code> block to mirror it.</td></tr>
+      <tr><td>Rails and the Identity Server told inconsistent health-check stories (readiness vs. liveness), with no single place stating either.</td><td>One health-check story for both services, stated once in <code>OBSERVABILITY.md</code>.</td></tr>
+      <tr><td>Entrypoint migrations plus <code>minimumHealthyPercent: 100</code> mean old and new code share the database mid-rollout, and multiple new tasks call <code>db:prepare</code> concurrently &mdash; neither constraint was written down.</td><td>Documented as an explicit assumption: migrations must be expand/contract; concurrent boots are normally safe via Postgres advisory locks, with a first-deploy caveat.</td></tr>
+
+      <tr class="review-cat"><td colspan="2">Observability coverage</td></tr>
+      <tr><td>Part 4 covered the Identity Server in depth and gave Rails a log-group name and little else, despite the requirement asking for both services.</td><td>Added parallel Rails SLOs, PostgreSQL alarms, and a Puma request-queue-time signal.</td></tr>
+      <tr><td>Tracing was written up as Identity/.NET-only with no mention of Rails.</td><td>Added one sentence noting Rails would use the same ADOT sidecar + OTLP pattern.</td></tr>
+
+      <tr class="review-cat"><td colspan="2">Checklist</td></tr>
+      <tr><td><code>.dockerignore</code> was listed as a Part 3 deliverable without independent confirmation it was actually committed.</td><td>Confirmed present in the repo.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <footer class="page-foot">
+    Compiled during the StrongMind take-home exercise. Entries are appended as each part of the exercise is worked through with AI assistance — kept as evidence of what was verified, what was assumed, and why.
+  </footer>
+
+</div>

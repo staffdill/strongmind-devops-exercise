@@ -1,0 +1,27 @@
+# Keeps the build context (and any accidental COPY) free of things that
+# don't belong in the runtime image -- source control, dev/test artifacts,
+# secrets, and local-only state.
+
+.git
+.github
+.gitignore
+
+log/*
+tmp/*
+!log/.keep
+!tmp/.keep
+
+spec
+test
+coverage
+
+node_modules
+
+.env
+.env.*
+config/master.key
+config/credentials/*.key
+
+docs
+docker-compose*.yml
+README*

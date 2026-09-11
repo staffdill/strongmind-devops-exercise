@@ -1,0 +1,307 @@
+name: Rails CI/CD
+
+# Trigger model (per Workstream B requirements):
+#   - any branch push        -> test + build-only (no push, no deploy)
+#   - push to main            -> test + build-and-push + deploy (production)
+#   - manual workflow_dispatch -> same as main, targeting the chosen environment
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to deploy'
+        type: choice
+        options:
+          - production
+        default: production
+
+# id-token: write is required for OIDC federation to AWS (no long-lived access keys).
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECS_CLUSTER: strongmind-production
+  ECS_SERVICE: rails-app
+  ECS_TASK_DEFINITION_FAMILY: rails-app
+  CONTAINER_NAME: rails-app
+
+# Cancels a superseded CI run on feature branches only. A workflow-level
+# cancellation kills every job in the run -- including an in-flight deploy --
+# regardless of the deploy job's own concurrency group below, so this must
+# evaluate to false for anything that can reach the deploy job, or that
+# job-level group provides no protection at all.
+#
+# workflow_dispatch runs get their own group keyed on run_id rather than
+# ref: workflow_dispatch can target any branch, not just main, so keying on
+# ref alone would let a later plain push to that same branch share the group
+# and cancel an in-flight manual deploy out from under it, even though this
+# run's own cancel-in-progress is false -- cancellation is decided by the
+# NEW run's setting, not the running one's.
+concurrency:
+  group: rails-ci-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rails
+          POSTGRES_PASSWORD: rails
+          POSTGRES_DB: rails_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://rails:rails@localhost:5432/rails_test
+      # Only needed if config/credentials are encrypted; harmless no-op otherwise.
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true # caches installed gems, keyed on Gemfile.lock
+
+      - name: Prepare test database
+        run: bin/rails db:schema:load
+
+      - name: Run RSpec
+        run: bundle exec rspec
+
+      - name: Run Brakeman
+        # -z / --exit-on-warn fails the job on any finding ("hardcore mode").
+        run: bundle exec brakeman --exit-on-warn --no-pager
+
+  build-only:
+    name: Build image (validation only)
+    # Feature branches only: prove the Dockerfile builds without paying for a
+    # multi-platform (QEMU-emulated) build on every push. The real
+    # multi-platform build happens in build-and-push, gated to main/dispatch.
+    if: github.ref != 'refs/heads/main' && github.event_name != 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: rails-app:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-and-push:
+    name: Build & push to ECR
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-rails-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        # Required for the arm64 leg of the build below: ubuntu-latest is an
+        # x86_64 runner, and without QEMU registered, Buildx has no way to
+        # execute a non-native-architecture build step -- this is the
+        # documented failure mode for multi-platform builds without it, not
+        # an edge case.
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push multi-platform image
+        # arm64 is built alongside amd64 specifically so Graviton (arm64)
+        # Fargate tasks are a task-definition cpuArchitecture change, not a
+        # rebuild -- Graviton runs Fargate tasks at roughly 20% lower cost for
+        # equivalent vCPU/memory, so keeping this option live is worth the
+        # extra build time even while x86 is what's deployed today.
+        #
+        # The `:latest` tag exists for human convenience only (local pulls,
+        # console browsing) -- the deploy step below always references
+        # ${{ github.sha }} explicitly, never `:latest`, so this tag is
+        # never what actually reaches production.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record deployed image URI
+        id: image
+        run: |
+          echo "image=${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to ECS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+
+    # Serializes actual deployments to this environment. Unlike the CI
+    # concurrency group above, this one never cancels an in-flight run --
+    # a half-finished deploy must stabilize or roll back cleanly first.
+    concurrency:
+      group: rails-deploy-${{ github.event.inputs.environment || 'production' }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-rails-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Capture pre-deploy task definition (rollback target)
+        id: previous
+        run: |
+          PREV_ARN=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          echo "arn=$PREV_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch current task definition
+        # Pulled live from ECS rather than a checked-in template, so CPU/
+        # memory/roles/env/secrets already configured in AWS are preserved
+        # untouched -- this step only ever changes the image URI.
+        #
+        # describe-task-definition by family name returns the latest
+        # REGISTERED revision, not necessarily the one the service is
+        # currently RUNNING -- those are normally the same thing since this
+        # pipeline is the only thing registering revisions and deploys each
+        # one immediately, but this isn't a snapshot of what's live right
+        # now if something registered a revision out of band.
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.ECS_TASK_DEFINITION_FAMILY }}" \
+            --query 'taskDefinition' > task-definition.json
+
+      - name: Render new task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-and-push.outputs.image }}
+
+      - name: Deploy task definition
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      - name: Verify the deployed revision actually won
+        # wait-for-service-stability only waits for the SERVICE to stabilize --
+        # it does not check which task definition it stabilized on. If the ECS
+        # deployment circuit breaker fires and auto-rolls-back, the service
+        # becomes stable on the PREVIOUS revision and this action still exits 0
+        # (tracked upstream, unresolved as of this writing: aws-actions/
+        # amazon-ecs-deploy-task-definition#191). Without this step the
+        # workflow would show green while production is still on the old SHA.
+        id: verify
+        run: |
+          LIVE_ARN=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --query 'services[0].deployments[?status==`PRIMARY`].taskDefinition' \
+            --output text)
+          EXPECTED_ARN="${{ steps.deploy.outputs.task-definition-arn }}"
+          if [ "$LIVE_ARN" != "$EXPECTED_ARN" ]; then
+            echo "::error title=Silent rollback detected::PRIMARY deployment is running $LIVE_ARN, expected $EXPECTED_ARN. The deployment circuit breaker most likely rolled back automatically."
+            exit 1
+          fi
+
+      - name: Roll back on failed deployment
+        # Belt-and-suspenders: the ECS service itself should already have
+        # deploymentCircuitBreaker { enable: true, rollback: true } configured
+        # (see ADR.md / decision log D2), so ECS will usually self-heal before
+        # this ever runs. This step exists for the case where the workflow's
+        # own wait times out independently of that, or where the verify step
+        # above catches a rollback the waiter alone couldn't see -- and to
+        # make the rollback explicit and visible in the run log either way.
+        #
+        # Deliberately narrower than a plain failure(): if an earlier step
+        # (OIDC auth, describe-services, render) fails for reasons unrelated
+        # to the deployment itself, steps.previous.outputs.arn may be empty
+        # or may just be the currently-healthy production revision -- forcing
+        # a --force-new-deployment bounce in that case would be a production
+        # service restart triggered by a runner/tooling problem, not an
+        # actual bad deploy. Only the two steps that can mean "the new
+        # revision isn't safely running" trigger a rollback.
+        if: failure() && (steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure')
+        run: |
+          echo "::error title=Deployment failed::${{ env.ECS_SERVICE }} is not confirmed running on the new task definition. Reverting to ${{ steps.previous.outputs.arn }}."
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --task-definition "${{ steps.previous.outputs.arn }}" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}"
+          # Rolling back successfully is still a failed deployment -- force
+          # the job to end in "failure" rather than let a clean rollback
+          # read as a green run.
+          exit 1
+
+      - name: Notify on failure
+        # CloudWatch alarms remain the system of record for production health
+        # (see OBSERVABILITY.md, decision log D4) -- this does not duplicate
+        # that pipeline, it feeds it: publishing to the same SNS topic the
+        # ECS/RDS alarms already use means a failed deploy pages on-call
+        # through the one alerting path, not a second bespoke one, while
+        # still satisfying "send a failure notification" as a property of
+        # this workflow rather than an inference from a separate document.
+        if: failure()
+        run: |
+          aws sns publish \
+            --topic-arn "${{ secrets.OPS_ALERTS_SNS_TOPIC_ARN }}" \
+            --subject "rails-app deploy failed: ${{ github.sha }}" \
+            --message "Deployment of ${{ github.sha }} to ${{ env.ECS_SERVICE }} failed and was rolled back to ${{ steps.previous.outputs.arn }}. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
